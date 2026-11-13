@@ -7,6 +7,7 @@
    convention this insurer still uses), missing-region handling. */
 
 libname src "/legacy_data";
+libname out "/legacy_data_out";
 
 data policies_clean;
     set src.policies;

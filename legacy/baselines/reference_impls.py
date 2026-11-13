@@ -162,7 +162,10 @@ def high_value_claims_review(
         on="policy_id",
         how="inner",
     )
-    df["claim_to_sum_insured_ratio"] = (df["claim_amount"] / df["sum_insured"]).round(4)
+    # The legacy SQL's CASE compares the unrounded ratio; only the selected
+    # column is rounded for display. The flag must use the unrounded value,
+    # or a ratio like 0.49996 would round to 0.5 and get the wrong flag.
+    raw_ratio = df["claim_amount"] / df["sum_insured"]
 
     def flag(ratio: float) -> str:
         if ratio >= 0.5:
@@ -171,7 +174,8 @@ def high_value_claims_review(
             return "WATCH"
         return "STANDARD"
 
-    df["review_flag"] = df["claim_to_sum_insured_ratio"].map(flag)
+    df["review_flag"] = raw_ratio.map(flag)
+    df["claim_to_sum_insured_ratio"] = raw_ratio.round(4)
     out = df[
         [
             "claim_id",

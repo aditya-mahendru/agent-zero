@@ -7,6 +7,7 @@
    for report-ready output. */
 
 libname src "/legacy_data";
+libname out "/legacy_data_out";
 
 proc sort data=src.premiums out=premiums_sorted;
     by policy_id;

@@ -7,6 +7,7 @@
    IF-THEN/ELSE recoding, RETAIN for a running flag across the BY group. */
 
 libname src "/legacy_data";
+libname out "/legacy_data_out";
 
 proc sort data=src.policies out=policies_sorted;
     by policy_id;
