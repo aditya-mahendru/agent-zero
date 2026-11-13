@@ -1,0 +1,13 @@
+# Generated synthetic data -- reproducible from data/generate_synthetic_data.py
+data/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Test/coverage artifacts
+.coverage
+coverage.xml
+report.xml
+.cache/
