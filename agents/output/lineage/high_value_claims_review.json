@@ -1,0 +1,68 @@
+{
+  "source_tables": [
+    "claims",
+    "policies"
+  ],
+  "target_columns": [
+    {
+      "name": "claim_id",
+      "source_columns": [
+        "claims.claim_id"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "policy_id",
+      "source_columns": [
+        "claims.policy_id"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "direct passthrough from joined policy"
+    },
+    {
+      "name": "claim_amount",
+      "source_columns": [
+        "claims.claim_amount"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "sum_insured",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "direct passthrough from joined policy"
+    },
+    {
+      "name": "claim_to_sum_insured_ratio",
+      "source_columns": [
+        "claims.claim_amount",
+        "policies.sum_insured"
+      ],
+      "transformation": "claim_amount / sum_insured, rounded to 4 decimal places"
+    },
+    {
+      "name": "review_flag",
+      "source_columns": [
+        "claims.claim_amount",
+        "policies.sum_insured"
+      ],
+      "transformation": "CASE on unrounded claim_amount/sum_insured: >=0.5 -> 'REVIEW REQUIRED', >=0.25 -> 'WATCH', else 'STANDARD'"
+    }
+  ],
+  "migration_wave": 1,
+  "quirks": [
+    "review_flag thresholds (0.5, 0.25) are computed on the raw unrounded ratio, not the rounded claim_to_sum_insured_ratio column -- using the rounded value could flip borderline rows across a threshold",
+    "hardcoded magic-number thresholds 0.5 and 0.25 are not parameterised anywhere in the legacy job -- preserve as literal constants, do not infer config",
+    "INNER JOIN to policies silently drops any claim whose policy_id has no matching policy row (no LEFT JOIN null-handling, no fan-out expected if policy_id is unique per policy)",
+    "WHERE c.status <> 'Rejected' uses SQL not-equals semantics -- if status is NULL in source data, those rows are silently excluded (NULL <> 'Rejected' is NULL, not TRUE) and must NOT be reclassified as included in the PySpark port",
+    "division claim_amount / sum_insured has no explicit guard against sum_insured = 0 or NULL in the original SQL -- original behavior (NULL or divide-by-zero error depending on engine) must be preserved or explicitly documented as a deviation",
+    "output is ORDER BY claim_to_sum_insured_ratio DESC -- if downstream consumers depend on row order (e.g. top-N review queues), the PySpark job must replicate the sort, not just produce an unordered DataFrame"
+  ]
+}

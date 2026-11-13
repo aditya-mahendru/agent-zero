@@ -310,7 +310,12 @@ def premium_aging_report(
         return "60+ Days"
 
     df["aging_bucket"] = df["collection_delay_days"].map(bucket)
-    df = df.sort_values(["product_line", "policy_id"]).reset_index(drop=True)
+    # premium_id tiebreaker: a policy can have several premium rows, and the
+    # running total's order must be deterministic, not an accident of
+    # whatever order rows happened to arrive in.
+    df = df.sort_values(["product_line", "policy_id", "premium_id"]).reset_index(
+        drop=True
+    )
 
     # RETAIN running_overdue_total, reset at each product_line BY-group.
     running_total = 0.0
@@ -339,7 +344,12 @@ def premium_aging_report(
 
 def policy_portfolio_rollup(policies: pd.DataFrame) -> pd.DataFrame:
     df = policies.copy()
-    df["region"] = df["region"].replace("", "UNKNOWN")
+    # fillna first: pandas reads a blank CSV field as NaN, not "", and a plain
+    # .replace("", ...) would miss it -- leaving those rows with a real NaN
+    # region, which pandas' groupby silently drops instead of bucketing as
+    # UNKNOWN (the SAS job's actual behaviour, since SAS has no empty-char
+    # vs. missing distinction: `if region = ""` catches both).
+    df["region"] = df["region"].fillna("UNKNOWN").replace("", "UNKNOWN")
 
     agg = (
         df.groupby(["region", "product_line"])

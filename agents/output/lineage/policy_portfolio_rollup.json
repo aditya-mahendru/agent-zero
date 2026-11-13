@@ -1,0 +1,44 @@
+{
+  "source_tables": [
+    "policies"
+  ],
+  "target_columns": [
+    {
+      "name": "region",
+      "source_columns": [
+        "policies.region"
+      ],
+      "transformation": "Blank/missing region recoded to 'UNKNOWN' before grouping"
+    },
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "Pass-through grouping key; set to literal 'ALL' on the inserted region subtotal row"
+    },
+    {
+      "name": "total_sum_insured",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "Sum of sum_insured grouped by region+product_line; on subtotal row, replaced with running sum of total_sum_insured across all product lines in that region"
+    },
+    {
+      "name": "policy_count",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "Count (N) of policies grouped by region+product_line; on subtotal row, replaced with running sum of policy_count across all product lines in that region"
+    }
+  ],
+  "migration_wave": 2,
+  "quirks": [
+    "Blank region values are recoded to literal string 'UNKNOWN' before aggregation, not dropped or nulled -- must preserve exact string match",
+    "A synthetic subtotal row is injected per region after the last product_line (product_line='ALL'), mixing detail and aggregate rows in the same output table -- any downstream consumer or Spark equivalent must either replicate this row-injection or the migration must explicitly flag/separate it",
+    "The subtotal computation uses SAS BY-group RETAIN logic on pre-sorted data (by region, product_line) -- product_line sort order determines which row is 'last' in the region and therefore where the ALL row lands; must sort identically before computing subtotals in PySpark (e.g. window function with lag/lead or union of detail + groupBy(region) aggregate, re-sorted by region+product_line so 'ALL' sorts correctly after real product lines)",
+    "policy_count is a row count (N) via PROC MEANS, not a distinct policy ID count -- if source has duplicate/multiple rows per policy this would double count; must confirm one-row-per-policy assumption holds",
+    "No explicit handling for sum_insured being null/missing -- PROC MEANS sum= silently excludes missing values from sum but N still counts rows with class vars present, so policy_count could include policies with null sum_insured while total_sum_insured excludes their contribution",
+    "Final output is only sorted by region+product_line, not by any numeric subtotal flag, so 'ALL' relies on string sort order being greater than actual product_line values to appear last within each region -- if any product_line value sorts after 'ALL' alphabetically this ordering assumption breaks"
+  ]
+}
