@@ -17,7 +17,9 @@ Never add real/personal data to this repo.
 
 ## Code
 
-- Python 3.12, PySpark 3.5.x. `ruff` for lint/format (runs via pre-commit).
+- Python 3.12, PySpark 3.5.x -- except CI's `test` job, which runs on 3.11:
+  pyspark 3.5.3's `toPandas()` still imports the stdlib `distutils` module,
+  which Python 3.12 removed. `ruff` for lint/format (runs via pre-commit).
 - One legacy job -> one PySpark job -> one test file -> one reconciliation report,
   named consistently by job slug, e.g. `legacy/claims_monthly.sql` ->
   `pyspark_jobs/claims_monthly.py` -> `tests/test_claims_monthly.py` ->

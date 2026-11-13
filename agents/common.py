@@ -14,10 +14,22 @@ import subprocess
 from pathlib import Path
 
 CLAUDE_TIMEOUT_SECONDS = 180
+_JOB_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class AgentOutputError(Exception):
     """Raised when the model's output fails validation -- never written to disk."""
+
+
+def validate_job_name(job_name: str) -> str:
+    """job_name becomes a file path component (legacy/<job_name>.sql,
+    pyspark_jobs/<job_name>.py, ...) -- reject anything that isn't a plain
+    identifier before it reaches any path."""
+    if not _JOB_NAME_RE.match(job_name):
+        raise ValueError(
+            f"Invalid job name {job_name!r}: must match {_JOB_NAME_RE.pattern}"
+        )
+    return job_name
 
 
 def call_claude(prompt: str) -> str:
@@ -62,6 +74,7 @@ def extract_json(text: str) -> dict:
 
 
 def legacy_job_path(job_name: str) -> Path:
+    validate_job_name(job_name)
     root = Path(__file__).parent.parent / "legacy"
     for ext in (".sql", ".sas"):
         candidate = root / f"{job_name}{ext}"

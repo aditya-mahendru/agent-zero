@@ -42,9 +42,23 @@ def main() -> None:
     finally:
         spark.stop()
 
-    lines = ["# Reconciliation rollup", "", "| Job | Status | Notes |", "|---|---|---|"]
+    lines = [
+        "# Reconciliation rollup",
+        "",
+        "Every baseline below is an independent pandas reference implementation of "
+        "the legacy job's logic, not output from the original SQL Server/SAS "
+        "engine, except where noted -- see legacy/baselines/MANIFEST.md.",
+        "",
+        "| Job | Status | Baseline provenance | Notes |",
+        "|---|---|---|---|",
+    ]
     for r in results:
         status = "PASS" if r.get("overall_pass") else "FAIL"
+        provenance = (
+            "SQL Server-validated"
+            if r["job"] in engine.SQL_SERVER_VALIDATED_JOBS
+            else "pandas reference impl"
+        )
         note = r.get("error", "")
         if not note and not r.get("overall_pass"):
             note = (
@@ -52,7 +66,7 @@ def main() -> None:
                 f"record_level_match={r.get('record_level_match')}, "
                 f"missing_columns={r.get('missing_columns')}"
             )
-        lines.append(f"| {r['job']} | {status} | {note} |")
+        lines.append(f"| {r['job']} | {status} | {provenance} | {note} |")
     lines.append("")
 
     REPORT_PATH.write_text("\n".join(lines))

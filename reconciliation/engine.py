@@ -23,6 +23,14 @@ BASELINE_DIR = ROOT / "legacy" / "baselines"
 REPORT_DIR = Path(__file__).parent / "reports"
 NUMERIC_TOLERANCE = 0.01
 
+# Every baseline is an independent pandas reference implementation of the
+# legacy job's logic, not output from the original engine -- see
+# legacy/baselines/MANIFEST.md. This one job is the exception: its baseline
+# was additionally validated against a real SQL Server 2022 run (538/538
+# rows matched exactly). Reports must say which case applies -- never let a
+# PASS read as "verified against the legacy engine" when it wasn't.
+SQL_SERVER_VALIDATED_JOBS = {"claims_monthly_summary"}
+
 
 def _get_spark():
     from pyspark.sql import SparkSession
@@ -79,31 +87,58 @@ def reconcile(job_name: str, baseline: pd.DataFrame, migrated: pd.DataFrame) -> 
             c for c in common_cols if baseline[c].dtype == object
         ] or common_cols
         try:
-            b_sorted = (
-                baseline[common_cols].sort_values(sort_cols).reset_index(drop=True)
-            )
-            m_sorted = (
-                migrated[common_cols].sort_values(sort_cols).reset_index(drop=True)
-            )
+            b_cmp = baseline[common_cols].copy()
+            m_cmp = migrated[common_cols].copy()
+            for col in common_cols:
+                if pd.api.types.is_numeric_dtype(b_cmp[col]):
+                    # Round before comparing -- otherwise float32 vs float64
+                    # or trailing-digit formatting differences between pandas
+                    # and toPandas() would fail an otherwise-correct match.
+                    b_cmp[col] = b_cmp[col].astype(float).round(2)
+                    m_cmp[col] = m_cmp[col].astype(float).round(2)
+                else:
+                    b_cmp[col] = b_cmp[col].astype(str)
+                    m_cmp[col] = m_cmp[col].astype(str)
+            b_sorted = b_cmp.sort_values(sort_cols).reset_index(drop=True)
+            m_sorted = m_cmp.sort_values(sort_cols).reset_index(drop=True)
             record_level_match = b_sorted.equals(m_sorted)
         except Exception:
             record_level_match = False
     result["record_level_match"] = record_level_match
 
+    # A PASS requires every check, including record-level equality: matching
+    # row counts and column totals alone can't rule out values shuffled
+    # between rows in a way that preserves both.
     result["overall_pass"] = (
         result["row_count_match"]
         and not result["missing_columns"]
         and all(c["match"] for c in numeric_checks.values())
+        and record_level_match
     )
     return result
 
 
 def write_report(result: dict) -> Path:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    if result["job"] in SQL_SERVER_VALIDATED_JOBS:
+        provenance = (
+            "pandas reference implementation of the legacy job's logic, "
+            "additionally validated against a real SQL Server 2022 run for "
+            "this job (538/538 rows matched exactly) -- see "
+            "legacy/baselines/MANIFEST.md."
+        )
+    else:
+        provenance = (
+            "pandas reference implementation of the legacy job's logic -- "
+            "**not** output from the original SQL Server/SAS engine. See "
+            "legacy/baselines/MANIFEST.md."
+        )
     lines = [
         f"# Reconciliation report: {result['job']}",
         "",
         f"**Overall: {'PASS' if result['overall_pass'] else 'FAIL'}**",
+        "",
+        f"**Baseline provenance:** {provenance}",
         "",
         f"- Baseline rows: {result['baseline_rows']}",
         f"- Migrated rows: {result['migrated_rows']}",

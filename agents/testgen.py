@@ -11,7 +11,12 @@ import ast
 import sys
 from pathlib import Path
 
-from agents.common import AgentOutputError, call_claude, extract_code_block
+from agents.common import (
+    AgentOutputError,
+    call_claude,
+    extract_code_block,
+    validate_job_name,
+)
 
 PYSPARK_DIR = Path(__file__).parent.parent / "pyspark_jobs"
 OUTPUT_DIR = Path(__file__).parent.parent / "tests"
@@ -55,6 +60,7 @@ def validate(code: str) -> None:
 
 
 def run(job_name: str) -> Path:
+    validate_job_name(job_name)
     job_path = PYSPARK_DIR / f"{job_name}.py"
     code = job_path.read_text()
 
@@ -63,7 +69,7 @@ def run(job_name: str) -> Path:
     test_code = extract_code_block(response)
     validate(test_code)
 
-    out_path = OUTPUT_DIR / f"test_{job_name}_pyspark.py"
+    out_path = OUTPUT_DIR / f"test_{job_name}.py"
     out_path.write_text(test_code + "\n" if not test_code.endswith("\n") else test_code)
     return out_path
 
