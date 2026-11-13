@@ -57,6 +57,7 @@ test:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends default-jre-headless > /dev/null
     - pip install -q -r requirements-dev.txt
   script:
+    - python data/generate_synthetic_data.py
     - pytest --cov=. --cov-report=term --cov-report=xml --junitxml=report.xml
   coverage: '/^TOTAL.*\s+(\d+%)$/'
   artifacts:
