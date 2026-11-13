@@ -310,7 +310,12 @@ def premium_aging_report(
         return "60+ Days"
 
     df["aging_bucket"] = df["collection_delay_days"].map(bucket)
-    df = df.sort_values(["product_line", "policy_id"]).reset_index(drop=True)
+    # premium_id tiebreaker: a policy can have several premium rows, and the
+    # running total's order must be deterministic, not an accident of
+    # whatever order rows happened to arrive in.
+    df = df.sort_values(["product_line", "policy_id", "premium_id"]).reset_index(
+        drop=True
+    )
 
     # RETAIN running_overdue_total, reset at each product_line BY-group.
     running_total = 0.0

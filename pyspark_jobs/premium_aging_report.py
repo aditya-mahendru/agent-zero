@@ -43,9 +43,12 @@ def run(spark, data_dir: str):
         .otherwise(F.lit("60+ Days")),
     )
 
+    # premium_id tiebreaker: a policy can have several premium rows, and the
+    # running total's order must be deterministic, not an accident of
+    # whatever order ties happened to land in.
     running_window = (
         Window.partitionBy("product_line")
-        .orderBy("policy_id")
+        .orderBy("policy_id", "premium_id")
         .rowsBetween(Window.unboundedPreceding, Window.currentRow)
     )
 
@@ -62,7 +65,7 @@ def run(spark, data_dir: str):
         .drop("overdue_increment")
     )
 
-    result = result.orderBy("product_line", "policy_id")
+    result = result.orderBy("product_line", "policy_id", "premium_id")
 
     return result
 
