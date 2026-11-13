@@ -63,6 +63,8 @@ def validate(lineage: dict) -> None:
             raise AgentOutputError(
                 f"target_columns entry missing keys: {missing_col_keys}"
             )
+    if not isinstance(lineage["quirks"], list):
+        raise AgentOutputError("Lineage output's quirks must be a list")
     if lineage["migration_wave"] not in (1, 2, 3):
         raise AgentOutputError("migration_wave must be 1, 2 or 3")
 
