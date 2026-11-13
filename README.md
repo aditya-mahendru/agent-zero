@@ -52,7 +52,8 @@ A small, honest, end-to-end slice of the full migration platform:
   against a verified-equivalent reference, not the legacy engine itself.
 - **Spark runtime:** local PySpark (no Databricks/cluster). Requires a JRE —
   `brew install openjdk@17` if missing locally; the CI `test` job installs
-  `openjdk-17-jre-headless` before running pytest.
+  `default-jre-headless` (whichever JRE the pinned `python:3.12-slim` image's
+  Debian release resolves that to) before running pytest.
 - **Scheduling/Operate phase:** out of scope for tonight beyond a short design note
   in the architecture doc — no live scheduler is built.
 
