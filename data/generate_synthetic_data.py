@@ -107,7 +107,8 @@ def generate_premiums(rng: random.Random, policies: list[dict]) -> list[dict]:
         end_date = date.fromisoformat(policy["end_date"])
         frequency = rng.choice(PAYMENT_FREQUENCIES)
         step_days = 30 if frequency == "Monthly" else 365
-        installments = max(1, (end_date - start_date).days // step_days)
+        term_days = (end_date - start_date).days
+        installments = max(1, -(-term_days // step_days))  # ceil division
         installment_amount = round(
             float(policy["sum_insured"]) * 0.04 / installments, 2
         )
