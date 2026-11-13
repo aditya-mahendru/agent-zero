@@ -6,7 +6,7 @@ MANIFEST.md for which jobs' baselines come from this reference
 implementation vs. an actual SQL Server run.
 
 Usage:
-    python legacy/baselines/generate_baselines.py
+    python -m legacy.baselines.generate_baselines
 """
 
 from pathlib import Path
