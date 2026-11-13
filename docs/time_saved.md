@@ -26,7 +26,7 @@ before the previous one's MR has merged), so a merge-to-merge window
 between *different* branches overlaps with work on the earlier one and
 overstates the gap. The clean, non-overlapping figure instead uses
 `4-scale-to-all-jobs`'s own first commit to its own merge: 19:59:44 →
-20:34:44 = **34 min 60 s for 9 jobs ≈ 3.9 min/job**, discovery through
+20:34:44 = **35 min for 9 jobs ≈ 3.9 min/job**, discovery through
 translation, test generation, bug-fixing and two rounds of code review —
 the full cost of adding one more migrated-and-reconciled job, not just
 the agent calls. (This still slightly understates true elapsed time: work
@@ -39,7 +39,7 @@ Within that same `4-scale-to-all-jobs` story, this session's own timing
 (not separately recorded in git, since all 9 jobs' work landed in commits
 after the fact): the **27 real `claude -p` calls** (discovery + translate
 + testgen × 9 jobs) ran start-to-finish in **about 10 minutes (≈1.1
-min/job)**. The remaining ~12 minutes of that story's 22 was finding and
+min/job)**. The remaining ~25 minutes of that story's 35 was finding and
 fixing 2 genuine bugs and responding to 2 rounds of Claude Reviewer
 findings — real engineering work, just not "agent compute time."
 
