@@ -12,7 +12,13 @@ import json
 import sys
 from pathlib import Path
 
-from agents.common import AgentOutputError, call_claude, extract_json, legacy_job_path
+from agents.common import (
+    AgentOutputError,
+    call_claude,
+    extract_json,
+    legacy_job_path,
+    log,
+)
 
 OUTPUT_DIR = Path(__file__).parent / "output" / "lineage"
 
@@ -62,15 +68,33 @@ def validate(lineage: dict) -> None:
 
 
 def run(job_name: str) -> Path:
-    source = legacy_job_path(job_name).read_text()
+    log(f"discovery[{job_name}]: starting")
+    job_path = legacy_job_path(job_name)
+    log(
+        f"discovery[{job_name}]: reading {job_path.relative_to(job_path.parent.parent)}"
+    )
+    source = job_path.read_text()
+
     prompt = build_prompt(job_name, source)
+    log(
+        f"discovery[{job_name}]: asking Claude for column-level lineage + migration wave"
+    )
     response = call_claude(prompt)
+
+    log(f"discovery[{job_name}]: extracting and validating lineage JSON")
     lineage = extract_json(response)
     validate(lineage)
+    log(
+        f"discovery[{job_name}]: valid -- {len(lineage['target_columns'])} target "
+        f"columns, wave {lineage['migration_wave']}, {len(lineage['quirks'])} quirks flagged"
+    )
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / f"{job_name}.json"
     out_path.write_text(json.dumps(lineage, indent=2) + "\n")
+    log(
+        f"discovery[{job_name}]: wrote {out_path.relative_to(out_path.parent.parent.parent)}"
+    )
     return out_path
 
 
