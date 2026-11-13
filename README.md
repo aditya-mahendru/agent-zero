@@ -114,7 +114,7 @@ python reconciliation/run_all.py   # produces reconciliation/report.md
 ## Submission pack
 
 See `docs/`:
-- `docs/solution_deck.pptx` — 6-slide deck on the official EXL × UCD template
+- `docs/solution_deck.pptx` (+ `docs/solution_deck.pdf`) — 7-slide solution deck
 - `docs/architecture_diagram.png` (or `.pdf`) — one-page architecture diagram
 - `docs/responsible_ai_note.md` — one-page Responsible AI note
 - Demo video — recorded separately, linked in the deck and the submission email
