@@ -21,11 +21,17 @@ grouped by exactly where they come from, so none is overstated:
 | `4-scale-to-all-jobs` → main | 20:34:44 | Scale the framework to the remaining 9 jobs, incl. 2 real bug fixes and 2 rounds of code review |
 
 **End-to-end, git-verified, marginal cost per job once the framework
-existed:** `3-agent-pipeline` merge (20:12:46) → `4-scale-to-all-jobs`
-merge (20:34:44) = **21 min 58 s for 9 jobs ≈ 2.4 min/job**, discovery
-through translation, test generation, bug-fixing and two rounds of code
-review — the full cost of adding one more migrated-and-reconciled job,
-not just the agent calls.
+existed:** this session pipelines work (the next branch is often started
+before the previous one's MR has merged), so a merge-to-merge window
+between *different* branches overlaps with work on the earlier one and
+overstates the gap. The clean, non-overlapping figure instead uses
+`4-scale-to-all-jobs`'s own first commit to its own merge: 19:59:44 →
+20:34:44 = **34 min 60 s for 9 jobs ≈ 3.9 min/job**, discovery through
+translation, test generation, bug-fixing and two rounds of code review —
+the full cost of adding one more migrated-and-reconciled job, not just
+the agent calls. (This still slightly understates true elapsed time: work
+on a branch — writing and testing code — typically starts a little before
+its first commit.)
 
 ## Measured (session): the agent calls alone, excluding review/fix time
 
@@ -55,16 +61,16 @@ tests, and manually verifying reconciliation.
 ## The comparison, computed on a consistent basis
 
 Comparing like with like — end-to-end manual estimate (60–480 min/job)
-against end-to-end agent-assisted measured cost (2.4 min/job,
+against end-to-end agent-assisted measured cost (3.9 min/job,
 git-verified, including bug-fixing and review):
 
-- 60 min ÷ 2.4 min/job ≈ **25×**
-- 480 min ÷ 2.4 min/job ≈ **200×**
+- 60 min ÷ 3.9 min/job ≈ **15×**
+- 480 min ÷ 3.9 min/job ≈ **123×**
 
-That **~25×–200×** range uses the same end-to-end basis on both sides. A
+That **~15×–123×** range uses the same end-to-end basis on both sides. A
 second, narrower figure — agent compute time only (≈1.1 min/job,
 session-observed, excluding review/fix) against the same manual
 estimate — gives roughly 55×–440×, but that one is **not** apples-to-
 apples: it excludes the review/fix time real engineering work needs on
-both sides. Treat 25×–200× as the honest headline number, and the wider
+both sides. Treat 15×–123× as the honest headline number, and the wider
 range as upper-bound/illustrative only.
