@@ -90,6 +90,7 @@ Generate synthetic data, then run everything:
 
 ```bash
 python data/generate_synthetic_data.py
+python -m legacy.baselines.generate_baselines   # legacy baseline outputs -- see legacy/baselines/MANIFEST.md
 pytest
 python reconciliation/run_all.py   # produces reconciliation/report.md
 ```
