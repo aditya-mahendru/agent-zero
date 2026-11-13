@@ -4,6 +4,12 @@ EXL × UCD Data & AI Hackathon 2026 · **Challenge 03: Agentic data platform mod
 
 Team: Aditya Mahendru, Devesh Shetty, Pritish Salian, Mohammed Shirhaan
 
+**Judges: this is the canonical repo** — https://github.com/aditya-mahendru/agent-zero
+(mirrored from the team's local GitLab instance, where all the actual
+development history, merge requests and CI pipelines live; GitLab isn't
+reachable from outside the team's machine, so every commit here is a
+plain mirror push, same SHAs).
+
 ## Problem
 
 A UK & Ireland insurer runs finance, actuarial and claims reporting on ~1,200 legacy
@@ -112,8 +118,8 @@ See `docs/`:
 - `docs/architecture_diagram.png` (or `.pdf`) — one-page architecture diagram
 - `docs/responsible_ai_note.md` — one-page Responsible AI note
 - Demo video — recorded separately, linked in the deck and the submission email
-- This repo — mirrored to GitHub at the link given in the deck/email (judges can't
-  reach the local GitLab instance this was built on)
+- This repo — mirrored to https://github.com/aditya-mahendru/agent-zero
+  (public, judges can't reach the local GitLab instance this was built on)
 
 Submission: hackathon form + email from a UCD address, subject
 `EXL Hackathon | Agent Zero | Challenge 03`, before 13 Nov 2026 23:59 Irish time.
