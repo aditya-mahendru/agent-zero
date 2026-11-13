@@ -1,0 +1,39 @@
+{
+  "source_tables": [
+    "policies"
+  ],
+  "target_columns": [
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "group-by key, passed through unchanged"
+    },
+    {
+      "name": "renewal_candidate_count",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "count of rows per product_line after filtering to Active policies with end_date within [AsOfDate, AsOfDate+60 days]"
+    },
+    {
+      "name": "total_sum_insured_up_for_renewal",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "sum of sum_insured per product_line for the same filtered rows, rounded to 2 decimal places"
+    }
+  ],
+  "migration_wave": 1,
+  "quirks": [
+    "@AsOfDate is a hardcoded literal ('2024-09-01'), not derived from current date -- any reimplementation must parameterize this explicitly rather than defaulting to today's date, or results will silently diverge",
+    "BETWEEN on end_date is inclusive on both bounds, so policies expiring exactly on AsOfDate or exactly 60 days later are both included -- an off-by-one in a non-inclusive date-range implementation would under-count",
+    "DATEADD(DAY, 60, @AsOfDate) is recomputed per-row implicitly as a constant; ensure the 60-day window is calendar days, not business days",
+    "status filter is a literal string match on 'Active' -- case sensitivity and any other status values (e.g. 'active', 'ACTIVE', 'Lapsed') must be handled consistently with legacy collation rules",
+    "no NULL-handling on end_date or status: rows with NULL end_date or NULL status are implicitly excluded by the WHERE clause (NULL BETWEEN and NULL = comparisons evaluate to unknown/false) -- must preserve this implicit exclusion rather than erroring or including them",
+    "no explicit handling of policies with product_line NULL -- these would form their own GROUP BY bucket (NULL group) in T-SQL; PySpark's groupBy also groups nulls together, but this should be verified/documented rather than assumed",
+    "ROUND uses standard rounding (round-half-away-from-zero in T-SQL) -- Spark's round() may use round-half-up/banker's rounding depending on implementation, so verify rounding mode parity for the reconciliation report",
+    "this is a reference re-implementation, not the original SAS/SQL engine behavior -- per repo convention, the reconciliation report must state this plainly and not claim verified parity with a production legacy system"
+  ]
+}
