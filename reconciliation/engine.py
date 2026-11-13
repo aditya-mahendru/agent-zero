@@ -100,8 +100,10 @@ def reconcile(job_name: str, baseline: pd.DataFrame, migrated: pd.DataFrame) -> 
                     # fillna before astype(str): a missing value stringifies
                     # as "nan" from pandas but "None" from a PySpark-sourced
                     # column, which would fail an otherwise-correct match.
-                    b_cmp[col] = b_cmp[col].fillna("").astype(str)
-                    m_cmp[col] = m_cmp[col].fillna("").astype(str)
+                    # Use a sentinel distinct from any real value (not "")
+                    # so a genuine null-vs-empty-string mismatch still fails.
+                    b_cmp[col] = b_cmp[col].fillna("<NULL>").astype(str)
+                    m_cmp[col] = m_cmp[col].fillna("<NULL>").astype(str)
             b_sorted = b_cmp.sort_values(sort_cols).reset_index(drop=True)
             m_sorted = m_cmp.sort_values(sort_cols).reset_index(drop=True)
             record_level_match = b_sorted.equals(m_sorted)

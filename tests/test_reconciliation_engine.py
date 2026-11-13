@@ -63,6 +63,22 @@ def test_reconcile_treats_nan_and_none_as_the_same_missing_value():
     assert result["record_level_match"] is True
 
 
+def test_reconcile_fails_on_null_vs_empty_string():
+    """A real null-handling regression (e.g. a missing value landing as an
+    empty string instead of staying null) must still be caught -- the
+    nan-vs-None normalization above must not paper over this. A second,
+    non-null row keeps the column's dtype realistically mixed (object),
+    not an all-NaN column pandas would infer as float64."""
+    baseline = pd.DataFrame(
+        {"policy_id": ["A", "B"], "region": [float("nan"), "Dublin"]}
+    )
+    migrated = pd.DataFrame({"policy_id": ["A", "B"], "region": ["", "Dublin"]})
+
+    result = engine.reconcile("fake_job", baseline, migrated)
+
+    assert result["record_level_match"] is False
+
+
 def test_reconcile_fails_on_missing_column():
     baseline = pd.DataFrame({"product_line": ["Motor"], "count": [2], "total": [10.0]})
     migrated = pd.DataFrame({"product_line": ["Motor"], "count": [2]})
