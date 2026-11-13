@@ -82,7 +82,7 @@
   <rect x="640" y="410" width="220" height="90" class="data"/>
   <text x="750" y="440" class="label" text-anchor="middle">Generated tests</text>
   <text x="750" y="460" class="sub" text-anchor="middle">tests/test_&lt;job&gt;.py</text>
-  <text x="750" y="476" class="sub" text-anchor="middle">66/66 passing</text>
+  <text x="750" y="476" class="sub" text-anchor="middle">67/67 passing (at submission)</text>
 
   <!-- Reconciliation engine -->
   <rect x="920" y="335" width="260" height="110" class="box"/>
