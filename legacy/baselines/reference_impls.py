@@ -339,7 +339,12 @@ def premium_aging_report(
 
 def policy_portfolio_rollup(policies: pd.DataFrame) -> pd.DataFrame:
     df = policies.copy()
-    df["region"] = df["region"].replace("", "UNKNOWN")
+    # fillna first: pandas reads a blank CSV field as NaN, not "", and a plain
+    # .replace("", ...) would miss it -- leaving those rows with a real NaN
+    # region, which pandas' groupby silently drops instead of bucketing as
+    # UNKNOWN (the SAS job's actual behaviour, since SAS has no empty-char
+    # vs. missing distinction: `if region = ""` catches both).
+    df["region"] = df["region"].fillna("UNKNOWN").replace("", "UNKNOWN")
 
     agg = (
         df.groupby(["region", "product_line"])

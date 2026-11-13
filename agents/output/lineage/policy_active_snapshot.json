@@ -1,0 +1,74 @@
+{
+  "source_tables": [
+    "policies",
+    "premiums"
+  ],
+  "target_columns": [
+    {
+      "name": "policy_id",
+      "source_columns": [
+        "policies.policy_id"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "customer_id",
+      "source_columns": [
+        "policies.customer_id"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "region",
+      "source_columns": [
+        "policies.region"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "sum_insured",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "direct passthrough"
+    },
+    {
+      "name": "effective_status",
+      "source_columns": [
+        "policies.status",
+        "policies.end_date",
+        "policies.start_date"
+      ],
+      "transformation": "CASE override of source status: Cancelled if status='Cancelled', else Expired if end_date < hardcoded snapshot date 2024-06-30, else Not Yet Active if start_date > snapshot date, else Active"
+    },
+    {
+      "name": "latest_premium_amount",
+      "source_columns": [
+        "premiums.premium_amount"
+      ],
+      "transformation": "premium_amount from the premiums row with max collected_date per policy_id (via ROW_NUMBER partitioned by policy_id ordered by collected_date desc), LEFT JOINed so null if no premiums exist"
+    },
+    {
+      "name": "latest_premium_collected_date",
+      "source_columns": [
+        "premiums.collected_date"
+      ],
+      "transformation": "collected_date from the same latest-premium row as latest_premium_amount, LEFT JOINed so null if no premiums exist"
+    }
+  ],
+  "migration_wave": 2,
+  "quirks": [
+    "Hardcoded snapshot date '2024-06-30' as a literal in the query -- must be preserved exactly (not replaced with CURRENT_DATE) unless the migration explicitly parameterizes it, since the business purpose is a fixed point-in-time snapshot",
+    "WHERE p.start_date <= @SnapshotDate silently excludes policies that start after the snapshot date, even though the CASE expression defines a 'Not Yet Active' status for that scenario -- that branch is dead/unreachable in the current output and migration must decide whether to preserve this filter (dropping future policies) or fix the apparent bug",
+    "ROW_NUMBER() tie-breaking on collected_date DESC has no secondary sort key, so if a policy has multiple premium rows with the identical max collected_date, the 'latest' row chosen is nondeterministic -- must pick a stable tie-breaker (e.g. a surrogate id) to make PySpark output reproducible and match-able to the legacy result",
+    "LEFT JOIN to premiums means policies with zero premium rows legitimately get NULL latest_premium_amount/collected_date -- must not be coalesced to 0 or dropped",
+    "effective_status CASE order matters: Cancelled is checked before date-based conditions, so a Cancelled policy with end_date in the past still reports 'Cancelled' not 'Expired' -- order of WHEN clauses must be preserved exactly in the PySpark translation"
+  ]
+}

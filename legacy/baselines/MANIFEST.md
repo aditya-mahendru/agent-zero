@@ -30,6 +30,24 @@ of the rest of tonight's scope. The remaining 6 T-SQL jobs and all 3 SAS
 jobs use the same reference-implementation approach, each written to
 faithfully reproduce its source job's logic — quirks included.
 
+## Reconciliation results (all 10 jobs, after agent-driven migration)
+
+Full rollup: `reconciliation/report.md`. **10/10 PASS** as of the last run.
+One finding worth recording: `policy_portfolio_rollup` initially FAILed
+reconciliation (36 baseline rows vs. 42 migrated) -- not because the
+agent-translated PySpark job was wrong, but because `reference_impls.py`
+had a bug. Pandas reads a blank CSV field as `NaN`, not `""`, so the
+original `.replace("", "UNKNOWN")` never caught it; `groupby()` then
+silently dropped those ~2%-of-policies null-region rows instead of
+bucketing them as `UNKNOWN`. The migrated PySpark job (`.isNull() |
+(col == "")`) had it right from the start -- SAS has no empty-string-vs-
+missing distinction for character values, so `if region = ""` in the
+original `.sas` job catches both, and the migrated job matched that
+correctly. Fixed the reference implementation (`.fillna("UNKNOWN")` first,
+matching the pattern already used elsewhere in the same file) rather than
+"fixing" the correct migrated code to match a buggy baseline -- a
+reconciliation FAIL is only meaningful if the baseline itself is right.
+
 ## Regenerating
 
 ```bash

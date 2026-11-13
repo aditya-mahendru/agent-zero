@@ -1,0 +1,73 @@
+{
+  "source_tables": [
+    "claims",
+    "policies"
+  ],
+  "target_columns": [
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "Grouping key, carried through unchanged from the joined policy"
+    },
+    {
+      "name": "claim_year",
+      "source_columns": [
+        "claims.claim_date"
+      ],
+      "transformation": "YEAR(claims.claim_date), grouping key"
+    },
+    {
+      "name": "claim_quarter",
+      "source_columns": [
+        "claims.claim_date"
+      ],
+      "transformation": "DATEPART(QUARTER, claims.claim_date), grouping key; integer 1-4 based on calendar quarter"
+    },
+    {
+      "name": "open_count",
+      "source_columns": [
+        "claims.status"
+      ],
+      "transformation": "COUNT of rows where claims.status = 'Open' via SUM(CASE WHEN ...)"
+    },
+    {
+      "name": "approved_count",
+      "source_columns": [
+        "claims.status"
+      ],
+      "transformation": "COUNT of rows where claims.status = 'Approved' via SUM(CASE WHEN ...)"
+    },
+    {
+      "name": "rejected_count",
+      "source_columns": [
+        "claims.status"
+      ],
+      "transformation": "COUNT of rows where claims.status = 'Rejected' via SUM(CASE WHEN ...)"
+    },
+    {
+      "name": "paid_count",
+      "source_columns": [
+        "claims.status"
+      ],
+      "transformation": "COUNT of rows where claims.status = 'Paid' via SUM(CASE WHEN ...)"
+    },
+    {
+      "name": "total_claims",
+      "source_columns": [
+        "claims.policy_id"
+      ],
+      "transformation": "COUNT(*) of claims rows per group after join to policies"
+    }
+  ],
+  "migration_wave": 2,
+  "quirks": [
+    "SUM(CASE WHEN ...) is a manual pivot of claims.status into fixed columns; any status value outside the four hardcoded literals ('Open','Approved','Rejected','Paid') is silently dropped from the per-status counts but still counted in total_claims, so open_count+approved_count+rejected_count+paid_count may be < total_claims -- must preserve this exact bucket set rather than inferring statuses dynamically",
+    "DATEPART(QUARTER, ...) is T-SQL-specific; equivalent in Spark is quarter(claim_date) -- verify both yield 1-4 using the same calendar-quarter definition with no fiscal-year offset",
+    "INNER JOIN to policies means any claim with a policy_id not present in policies is silently excluded from all rollups -- a LEFT JOIN would change total_claims, so fan-out/filtering behavior must be preserved exactly",
+    "GROUP BY repeats the YEAR()/DATEPART() expressions rather than referencing output aliases (SQL Server doesn't allow grouping by SELECT-list alias) -- purely syntactic, no semantic quirk to preserve beyond matching the same three grouping keys in PySpark",
+    "Assumes policy_id join key has a 1:1 (or 1:many from policies to claims) relationship; if a claim's policy_id matches multiple policy rows (duplicate policy_id in policies), this join would fan out and inflate all counts -- confirm policy_id uniqueness in policies before treating row counts as claim counts",
+    "status comparisons are presumably case-sensitive/exact-match literals ('Open','Approved','Rejected','Paid') -- any casing/whitespace variants in source data (e.g. 'open', 'OPEN ') would not match and would fall through uncounted into the total_claims-only bucket"
+  ]
+}

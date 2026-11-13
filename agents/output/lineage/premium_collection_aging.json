@@ -1,0 +1,68 @@
+{
+  "source_tables": [
+    "premiums",
+    "policies"
+  ],
+  "target_columns": [
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "Direct passthrough from policies"
+    },
+    {
+      "name": "region",
+      "source_columns": [
+        "policies.region"
+      ],
+      "transformation": "COALESCE(policies.region, 'UNKNOWN') to replace NULL region with literal 'UNKNOWN'"
+    },
+    {
+      "name": "premium_id",
+      "source_columns": [
+        "premiums.premium_id"
+      ],
+      "transformation": "Direct passthrough from premiums"
+    },
+    {
+      "name": "policy_id",
+      "source_columns": [
+        "premiums.policy_id"
+      ],
+      "transformation": "Direct passthrough from premiums"
+    },
+    {
+      "name": "collection_delay_days",
+      "source_columns": [
+        "premiums.period_start",
+        "premiums.collected_date"
+      ],
+      "transformation": "DATEDIFF(DAY, period_start, collected_date), i.e. collected_date - period_start in days"
+    },
+    {
+      "name": "aging_bucket",
+      "source_columns": [
+        "premiums.period_start",
+        "premiums.collected_date"
+      ],
+      "transformation": "Bucket of DATEDIFF(DAY, period_start, collected_date) recomputed independently per branch: <=0 -> 'On Time', 1-30 -> '1-30 Days', 31-60 -> '31-60 Days', else -> '60+ Days'"
+    },
+    {
+      "name": "premium_amount",
+      "source_columns": [
+        "premiums.premium_amount"
+      ],
+      "transformation": "Direct passthrough from premiums"
+    }
+  ],
+  "migration_wave": 1,
+  "quirks": [
+    "The day-delay CASE expression recomputes DATEDIFF(DAY, period_start, collected_date) three separate times instead of referencing a single computed value; migration must ensure all three evaluations stay logically identical (e.g. compute once and reuse) to avoid subtle divergence.",
+    "If collected_date is NULL, DATEDIFF returns NULL; none of the WHEN conditions evaluate true (NULL comparisons are not TRUE), so the row silently falls into the ELSE branch and is misclassified as '60+ Days' rather than being flagged as uncollected/unknown.",
+    "Negative delays (collected_date before period_start) are bucketed into 'On Time' via the <=0 condition rather than being treated as an anomaly or excluded.",
+    "COALESCE(pol.region, 'UNKNOWN') masks NULL region values with the literal string 'UNKNOWN' -- must preserve this exact sentinel value, not drop/filter the rows.",
+    "INNER JOIN to policies silently drops any premiums rows whose policy_id has no matching policy -- no outer join or audit of orphaned premiums, so reconciliation must account for this implicit filtering.",
+    "Bucket boundaries are inclusive/exclusive in a specific way (<=0, 1-30, 31-60, 60+) -- off-by-one errors at the 0/1, 30/31, and 60/61 boundaries must be avoided during PySpark translation."
+  ]
+}

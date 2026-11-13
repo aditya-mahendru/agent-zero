@@ -1,0 +1,91 @@
+{
+  "source_tables": [
+    "policies",
+    "claims"
+  ],
+  "target_columns": [
+    {
+      "name": "policy_id",
+      "source_columns": [
+        "policies.policy_id",
+        "claims.policy_id"
+      ],
+      "transformation": "BY-group merge key between policies_sorted and claims_agg_sorted, both pre-sorted by policy_id."
+    },
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "Passed through unchanged from policies; also becomes the primary key of the final output sort order."
+    },
+    {
+      "name": "sum_insured",
+      "source_columns": [
+        "policies.sum_insured"
+      ],
+      "transformation": "Passed through unchanged from policies; used as the denominator for severity_ratio."
+    },
+    {
+      "name": "<other policy attributes>",
+      "source_columns": [
+        "policies.*"
+      ],
+      "transformation": "All remaining policy columns are carried through unchanged from policies_sorted via the DATA step merge."
+    },
+    {
+      "name": "claim_count",
+      "source_columns": [
+        "claims.policy_id",
+        "claims.claim_amount"
+      ],
+      "transformation": "COUNT(*) of claims grouped by policy_id (PROC SQL); zero-filled when the policy has no matching claims record."
+    },
+    {
+      "name": "total_claim_amount",
+      "source_columns": [
+        "claims.claim_amount"
+      ],
+      "transformation": "SUM(claim_amount) grouped by policy_id; zero-filled when the policy has no matching claims record."
+    },
+    {
+      "name": "max_claim_amount",
+      "source_columns": [
+        "claims.claim_amount"
+      ],
+      "transformation": "MAX(claim_amount) grouped by policy_id; zero-filled when the policy has no matching claims record."
+    },
+    {
+      "name": "severity_ratio",
+      "source_columns": [
+        "max_claim_amount (derived)",
+        "policies.sum_insured"
+      ],
+      "transformation": "max_claim_amount / sum_insured when sum_insured > 0, else hardcoded to 0 to avoid division by zero/negative."
+    },
+    {
+      "name": "severity_flag",
+      "source_columns": [
+        "severity_ratio (derived)"
+      ],
+      "transformation": "IF-THEN/ELSE recode: 'HIGH' if severity_ratio >= 0.5, 'MEDIUM' if >= 0.25, else 'LOW'."
+    },
+    {
+      "name": "high_severity_count",
+      "source_columns": [
+        "severity_flag (derived)"
+      ],
+      "transformation": "RETAIN counter incremented by 1 each time severity_flag = 'HIGH', accumulated in policy_id merge-traversal order; not explicitly dropped, so it leaks into the output as a running cumulative count rather than a per-row or per-group total."
+    }
+  ],
+  "migration_wave": 3,
+  "quirks": [
+    "Both inputs must be pre-sorted by policy_id before the DATA step MERGE/BY -- PySpark has no implicit sort-merge BY-group semantics, so this ordering must be made explicit (e.g. window functions) or the merge logic re-derived via explicit joins.",
+    "The MERGE with 'if in_pol;' implements a left-outer join keyed on policy_id: every policy row is kept (claims zero-filled if absent), while any claim rows whose policy_id has no matching policy record are silently dropped. This is not a full outer or inner join and must be preserved exactly.",
+    "high_severity_count is a RETAIN variable that is never reset and never dropped (only in_pol/in_claims are dropped), so it survives into the final output table as an order-dependent running tally of HIGH-severity rows seen so far during the policy_id-sorted merge pass -- it is NOT a per-row or per-policy aggregate.",
+    "The final output is re-sorted by product_line, policy_id, which is a different order than the policy_id-only order the RETAIN counter was computed in -- so in the output, high_severity_count values appear out of their accumulation sequence and look inconsistent/non-monotonic per row unless the original merge order is reconstructed.",
+    "severity_ratio divide-by-zero guard treats sum_insured <= 0 as 0 ratio (silently, no null/error raised) -- must be replicated rather than letting Spark produce null/NaN or raise on division by zero.",
+    "The 'if in_claims then do; claim_count = claim_count; ... end;' block is a no-op reassignment (quirk of legacy style, not an actual transformation) -- only the else branch (zero-fill) has real effect.",
+    "This reference re-implementation is a legacy SQL/DATA-step pipeline, not the original SAS engine output -- any reconciliation against it must be reported as validation against a re-implemented baseline, not the true legacy system, per repo convention."
+  ]
+}

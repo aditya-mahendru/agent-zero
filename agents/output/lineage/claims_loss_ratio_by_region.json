@@ -1,0 +1,55 @@
+{
+  "source_tables": [
+    "policies",
+    "claims",
+    "premiums"
+  ],
+  "target_columns": [
+    {
+      "name": "region",
+      "source_columns": [
+        "policies.region"
+      ],
+      "transformation": "ISNULL(pol.region, 'UNKNOWN'); grouping key"
+    },
+    {
+      "name": "product_line",
+      "source_columns": [
+        "policies.product_line"
+      ],
+      "transformation": "passthrough grouping key"
+    },
+    {
+      "name": "total_claims",
+      "source_columns": [
+        "claims.claim_amount"
+      ],
+      "transformation": "SUM(claim_amount) per region/product_line group, rounded to 2 decimals"
+    },
+    {
+      "name": "total_premium",
+      "source_columns": [
+        "premiums.premium_amount"
+      ],
+      "transformation": "SUM(premium_amount) per region/product_line group, rounded to 2 decimals"
+    },
+    {
+      "name": "loss_ratio",
+      "source_columns": [
+        "claims.claim_amount",
+        "premiums.premium_amount"
+      ],
+      "transformation": "SUM(claim_amount) / NULLIF(SUM(premium_amount), 0), rounded to 4 decimals; NULL when premium sum is 0"
+    }
+  ],
+  "migration_wave": 2,
+  "quirks": [
+    "Two independent LEFT JOINs from policies to claims and to premiums (not claims->premiums) means each policy's claims rows are cross-joined against each of its premiums rows -- a policy with 3 claims and 2 premium records fan-outs to 6 rows before aggregation, inflating both SUM(claim_amount) and SUM(premium_amount); must replicate this fan-out exactly (e.g. by joining both tables independently before aggregating) rather than naively summing claims and premiums separately per policy, or totals will not match the legacy baseline",
+    "ISNULL(pol.region, 'UNKNOWN') is applied both in SELECT and GROUP BY -- must coalesce region before grouping, not after, so NULL regions are merged into a single 'UNKNOWN' bucket rather than grouped separately or dropped",
+    "NULLIF(SUM(premium_amount), 0) returns NULL (not an error or zero) when a region/product_line group has zero total premium, making loss_ratio NULL for that row -- must preserve NULL (not 0, not divide-by-zero error) in that case",
+    "LEFT JOINs mean policies with no matching claims or no matching premiums still appear in the output; SUM over all-NULL claim_amount or premium_amount for such groups yields NULL rather than 0 in both T-SQL and PySpark, which then also propagates to loss_ratio",
+    "~2% of policies have missing region per the source comment -- synthetic data generator must preserve this null rate for the ISNULL/UNKNOWN quirk to be meaningfully tested",
+    "ROUND is applied to SUM at 2 decimals for totals but 4 decimals for loss_ratio -- precision/rounding must be replicated exactly, including rounding order (sum first, then round) to avoid float drift vs PySpark's SUM/round semantics",
+    "ORDER BY region, product_line in the legacy output is a presentation-layer artifact of SQL, not a business rule -- row order itself is not a reconciliation-worthy property for a Spark DataFrame, but any comparison must sort both sides consistently before diffing"
+  ]
+}
