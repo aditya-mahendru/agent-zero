@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 CLAUDE_TIMEOUT_SECONDS = 180
@@ -19,6 +21,16 @@ _JOB_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 class AgentOutputError(Exception):
     """Raised when the model's output fails validation -- never written to disk."""
+
+
+def log(message: str) -> None:
+    """Print a timestamped, immediately-flushed progress line to stderr.
+
+    `claude -p` is otherwise silent for 10-60s while it thinks -- this is
+    what lets a human watching the agent run see each stage happen live,
+    instead of a blank terminal followed by a single final line.
+    """
+    print(f"[{time.strftime('%H:%M:%S')}] {message}", file=sys.stderr, flush=True)
 
 
 def validate_job_name(job_name: str) -> str:
@@ -34,16 +46,21 @@ def validate_job_name(job_name: str) -> str:
 
 def call_claude(prompt: str) -> str:
     """Run `claude -p <prompt>` headlessly and return its stdout."""
+    log(f"Calling claude -p ({len(prompt)} chars of prompt)...")
+    started = time.monotonic()
     result = subprocess.run(
         ["claude", "-p", prompt],
         capture_output=True,
         text=True,
         timeout=CLAUDE_TIMEOUT_SECONDS,
     )
+    elapsed = time.monotonic() - started
     if result.returncode != 0:
+        log(f"claude -p failed after {elapsed:.1f}s")
         raise AgentOutputError(
             f"claude -p exited {result.returncode}: {result.stderr[:500]}"
         )
+    log(f"claude -p responded in {elapsed:.1f}s ({len(result.stdout)} chars)")
     return result.stdout
 
 
