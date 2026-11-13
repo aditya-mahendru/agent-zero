@@ -9,43 +9,45 @@
       "source_columns": [
         "policies.product_line"
       ],
-      "transformation": "Direct passthrough from joined policies row, grouped"
+      "transformation": "Direct passthrough from policies, used as grouping key"
     },
     {
       "name": "claim_month",
       "source_columns": [
         "claims.claim_date"
       ],
-      "transformation": "Truncated to first of month via DATEFROMPARTS(YEAR(claim_date), MONTH(claim_date), 1)"
+      "transformation": "Truncate claim_date to first day of its month via DATEFROMPARTS(YEAR(claim_date), MONTH(claim_date), 1)"
     },
     {
       "name": "status_group",
       "source_columns": [
         "claims.status"
       ],
-      "transformation": "CASE regroup: Approved/Paid -> Settled, Rejected -> Declined, else -> Pending"
+      "transformation": "CASE mapping: 'Approved'/'Paid' -> 'Settled'; 'Rejected' -> 'Declined'; any other value (including NULL) -> 'Pending'"
     },
     {
       "name": "claim_count",
       "source_columns": [
         "claims.policy_id"
       ],
-      "transformation": "COUNT(*) of claims rows per group after join and GROUP BY"
+      "transformation": "COUNT(*) of claim rows per (product_line, claim_month, status_group) group after inner join to policies"
     },
     {
       "name": "total_claim_amount",
       "source_columns": [
         "claims.claim_amount"
       ],
-      "transformation": "SUM(claim_amount) per group, rounded to 2 decimal places"
+      "transformation": "SUM(claim_amount) per group, rounded to 2 decimal places with ROUND"
     }
   ],
-  "migration_wave": 2,
+  "migration_wave": 1,
   "quirks": [
-    "INNER JOIN on policy_id silently drops claims with no matching policy (orphan claims excluded, not flagged as nulls)",
-    "Status regrouping CASE is duplicated in SELECT and GROUP BY -- any status not explicitly listed (including NULL) falls into 'Pending' via ELSE, so new/unexpected status values are silently reclassified rather than erroring",
-    "DATEFROMPARTS month truncation always sets day=1 -- must use a day-agnostic month-start derivation (e.g. trunc('month')) in the rewrite, not just reformatting",
-    "ROUND(SUM(...), 2) applies float rounding after aggregation -- precision/representation differences (float vs decimal) between SAS/SQL and Spark can cause small reconciliation diffs that must be explicitly tolerated/documented, not treated as true mismatches",
-    "ORDER BY is cosmetic (claim_month, product_line) and has no effect on aggregated values -- do not treat row order as a reconciliation signal"
+    "INNER JOIN on policy_id silently drops any claims whose policy_id has no matching row in policies -- these claims vanish from totals with no error, so the PySpark job must preserve inner-join semantics exactly rather than defaulting to a left join",
+    "Status regrouping is a closed three-way bucket: only 'Approved' and 'Paid' map to 'Settled' and only 'Rejected' maps to 'Declined'; every other value including NULL, empty string, or any unanticipated status code falls into 'Pending' -- do not treat NULL status as a separate/error case",
+    "DATEFROMPARTS(YEAR(claim_date), MONTH(claim_date), 1) always emits day=1 regardless of claim_date's actual day, effectively a month-truncation; if claim_date is NULL this expression errors/propagates NULL in T-SQL (YEAR(NULL) is NULL, DATEFROMPARTS with NULL arg returns NULL) -- confirm whether claim_date can be NULL in source data and replicate T-SQL's NULL-propagation behavior rather than Spark's trunc() which may differ",
+    "ROUND(SUM(claim_amount), 2) uses T-SQL's round-half-away-from-zero on a float/decimal; Spark's round() uses round-half-up (HALF_UP) semantics which usually match but can diverge at exact .005 boundary cases depending on underlying decimal precision -- verify SUM(claim_amount) column type (float vs decimal) since T-SQL float rounding can introduce tiny representation differences before rounding",
+    "GROUP BY repeats the full CASE expression for status_group (not an alias) -- this is standard T-SQL requirement, not a quirk requiring special handling in Spark, but confirms the grouping key is the post-CASE value, not raw status",
+    "ORDER BY claim_month, product_line only affects presentation order of the output and has no bearing on aggregated values -- do not rely on row order for correctness checks during reconciliation, but do replicate it if downstream consumers expect sorted output",
+    "No explicit handling of duplicate/multiple policy rows per policy_id -- if policies.policy_id is not unique, the inner join would silently fan out claim rows and inflate claim_count/total_claim_amount; this baseline assumes policy_id is unique and that assumption must be validated against the synthetic data generator, not assumed true in general"
   ]
 }
