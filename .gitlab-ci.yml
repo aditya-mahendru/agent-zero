@@ -1,0 +1,129 @@
+# Pipeline: lint (pre-commit) -> test (pytest, needs a JRE for PySpark) -> security (Gitleaks, Trivy) -> quality (SonarQube) -> review (Claude, MRs only)
+#
+# Every image is pinned to an exact digest (taken from the last green run on 2026-11-13), so an
+# upstream release can't change the pipeline overnight. Update pins deliberately, in an MR.
+#
+# Needs these CI/CD variables (set once on the Workspace group, inherited by every project):
+#   SONAR_HOST_URL = http://sonarqube:9000
+#   SONAR_TOKEN    = <token from SonarQube>  (Masked)
+#   GITLAB_REVIEW_TOKEN, ANTHROPIC_API_KEY  (for the Claude review job)
+# The SonarQube job is skipped automatically until SONAR_TOKEN exists, and the
+# Claude review job until a Claude credential exists.
+
+include:
+  - project: workspace/ci-templates
+    file: claude-review.yml
+
+stages:
+  - lint
+  - test
+  - security
+  - quality
+  - review
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# Same checks as the local pre-commit hooks, so nothing slips through
+# when someone (or something) commits without them installed.
+pre-commit:
+  stage: lint
+  image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+  variables:
+    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+  cache:
+    key: pre-commit
+    paths:
+      - .cache/pre-commit
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+    - pip install -q pre-commit==4.0.1
+  script:
+    - pre-commit run --all-files --show-diff-on-failure
+  rules:
+    - exists:
+        - .pre-commit-config.yaml
+
+# PySpark needs a JRE at runtime, so the test image installs a headless OpenJDK
+# before pytest runs any job that creates a SparkSession.
+test:
+  stage: test
+  image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+  variables:
+    JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends openjdk-17-jre-headless > /dev/null
+    - pip install -q -r requirements-dev.txt
+  script:
+    - pytest --cov=. --cov-report=term --cov-report=xml --junitxml=report.xml
+  coverage: '/^TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    paths:
+      - coverage.xml
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+# Secrets anywhere in the git history (full clone so old commits are scanned too).
+gitleaks:
+  stage: security
+  image:
+    name: zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - gitleaks git --redact --verbose .
+
+# Known vulnerabilities in dependencies, and misconfigurations in Dockerfiles/IaC.
+trivy:
+  stage: security
+  image:
+    name: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+    entrypoint: [""]
+  variables:
+    TRIVY_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/trivy
+  cache:
+    key: trivy
+    paths:
+      - .cache/trivy
+  script:
+    - trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-dirs .cache .
+
+# If the project builds a Docker image, scan the image too, e.g.:
+#   - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+# Code quality. Waits for the quality gate and fails the pipeline if it fails.
+# The free edition analyses one branch per project, so this runs on the default branch only.
+sonarqube:
+  stage: quality
+  image:
+    name: sonarsource/sonar-scanner-cli@sha256:6e6eca4d552695a98fb7dab84f0c1bd0885ebbfe272654d1552e24bd7f452d51  # CLI 8.4.0.16527
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+    SONAR_USER_HOME: ${CI_PROJECT_DIR}/.cache/sonar
+  cache:
+    key: sonar
+    paths:
+      - .cache/sonar
+  script:
+    - EXTRA=""
+    - if [ -f coverage.xml ]; then EXTRA="$EXTRA -Dsonar.python.coverage.reportPaths=coverage.xml"; fi
+    - if [ -d tests ]; then EXTRA="$EXTRA -Dsonar.tests=tests"; fi
+    - >
+      sonar-scanner
+      -Dsonar.projectKey=${CI_PROJECT_PATH_SLUG}
+      -Dsonar.projectName="${CI_PROJECT_PATH}"
+      -Dsonar.exclusions=.cache/**,tests/**,legacy/**
+      -Dsonar.qualitygate.wait=true
+      $EXTRA
+  rules:
+    - if: $SONAR_TOKEN && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
