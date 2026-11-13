@@ -52,8 +52,11 @@ A small, honest, end-to-end slice of the full migration platform:
   against a verified-equivalent reference, not the legacy engine itself.
 - **Spark runtime:** local PySpark (no Databricks/cluster). Requires a JRE —
   `brew install openjdk@17` if missing locally; the CI `test` job installs
-  `default-jre-headless` (whichever JRE the pinned `python:3.12-slim` image's
-  Debian release resolves that to) before running pytest.
+  `default-jre-headless` (whichever JRE the pinned image's Debian release
+  resolves that to) before running pytest. That job runs on `python:3.11-slim`
+  rather than the `3.12-slim` the other jobs use: pyspark 3.5.3's
+  `toPandas()` still imports the stdlib `distutils` module, which Python
+  3.12 removed outright.
 - **Scheduling/Operate phase:** out of scope for tonight beyond a short design note
   in the architecture doc — no live scheduler is built.
 
