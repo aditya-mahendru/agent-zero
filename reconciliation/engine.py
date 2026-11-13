@@ -97,8 +97,11 @@ def reconcile(job_name: str, baseline: pd.DataFrame, migrated: pd.DataFrame) -> 
                     b_cmp[col] = b_cmp[col].astype(float).round(2)
                     m_cmp[col] = m_cmp[col].astype(float).round(2)
                 else:
-                    b_cmp[col] = b_cmp[col].astype(str)
-                    m_cmp[col] = m_cmp[col].astype(str)
+                    # fillna before astype(str): a missing value stringifies
+                    # as "nan" from pandas but "None" from a PySpark-sourced
+                    # column, which would fail an otherwise-correct match.
+                    b_cmp[col] = b_cmp[col].fillna("").astype(str)
+                    m_cmp[col] = m_cmp[col].fillna("").astype(str)
             b_sorted = b_cmp.sort_values(sort_cols).reset_index(drop=True)
             m_sorted = m_cmp.sort_values(sort_cols).reset_index(drop=True)
             record_level_match = b_sorted.equals(m_sorted)

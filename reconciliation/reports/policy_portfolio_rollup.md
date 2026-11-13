@@ -2,10 +2,12 @@
 
 **Overall: PASS**
 
+**Baseline provenance:** pandas reference implementation of the legacy job's logic -- **not** output from the original SQL Server/SAS engine. See legacy/baselines/MANIFEST.md.
+
 - Baseline rows: 42
 - Migrated rows: 42
 - Row count match: True
-- Record-level match (full row equality after sort): False
+- Record-level match (full row equality after sort): True
 - Missing columns (in baseline, not migrated): none
 - Extra columns (in migrated, not baseline): none
 
